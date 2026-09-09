@@ -8,7 +8,6 @@ jobs:
     runs-on: windows-2022 # 也可替换为 windows-2022
     steps:
       - name: 1. 启用远程桌面与配置防火墙
-        shell: powershell
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
@@ -16,7 +15,6 @@ jobs:
           Start-Service -Name TermService
 
       - name: 2. 安装中文语言包并配置系统区域
-        shell: powershell
         run: |
           Set-TimeZone -Id "China Standard Time"
 
@@ -33,7 +31,6 @@ jobs:
           Set-Culture -CultureInfo zh-CN
 
       - name: 3. 创建远程桌面管理员账户
-        shell: powershell
         run: |
           $Username = "adminuser"
           # 建议在仓库 Settings -> Secrets and variables -> Actions 中配置 RDP_PASSWORD，若无则使用下方默认密码
@@ -48,7 +45,6 @@ jobs:
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member $Username
 
       - name: 4. 安装并连接 Tailscale
-        shell: powershell
         env:
           TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
         run: |
@@ -67,7 +63,6 @@ jobs:
           & $tailscalePath up --authkey=$env:TAILSCALE_AUTHKEY --hostname="github-rdp-server" --unattended
 
       - name: 5. 保持服务器在线 (运行上限受 GitHub 限制)
-        shell: powershell
         run: |
           Write-Host "远程桌面与 Tailscale 均已就绪。"
           Write-Host "注意：GitHub Actions 公共 Runner 最长单次任务上限为 6 小时。"
