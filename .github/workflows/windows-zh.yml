@@ -18,16 +18,18 @@ jobs:
       - name: 2. 安装中文语言包并配置系统区域
         shell: powershell
         run: |
-          Write-Host "正在设置时区为中国标准时间..."
           Set-TimeZone -Id "China Standard Time"
 
-          Write-Host "正在下载并安装简体中文语言包 (zh-CN)..."
+          # 安装中文语言包与功能
           Install-Language -Language zh-CN -CopyToSettings -ExcludeFolders
 
-          Write-Host "正在将显示语言与区域设置为中文..."
+          # 配置系统首选显示语言与区域
           Set-SystemPreferredUILanguage -Language zh-CN
           Set-WinSystemLocale -SystemLocale zh-CN
-          Set-WinUserLanguageList -LanguageList (New-WinUserLanguageList -Language zh-CN) -Force
+          
+          # 设置用户语言列表
+          $langs = New-WinUserLanguageList -Language zh-CN
+          Set-WinUserLanguageList -LanguageList $langs -Force
           Set-Culture -CultureInfo zh-CN
 
       - name: 3. 创建远程桌面管理员账户
