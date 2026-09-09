@@ -1,0 +1,81 @@
+name: Windows Cloud RDP (Chinese)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022 # 也可替换为 windows-2022
+    steps:
+      - name: 1. 启用远程桌面与配置防火墙
+        shell: powershell
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-Service -Name TermService -StartupType Automatic
+          Start-Service -Name TermService
+
+      - name: 2. 安装中文语言包并配置系统区域
+        shell: powershell
+        run: |
+          Write-Host "正在设置时区为中国标准时间..."
+          Set-TimeZone -Id "China Standard Time"
+
+          Write-Host "正在下载并安装简体中文语言包 (zh-CN)..."
+          Install-Language -Language zh-CN -CopyToSettings -ExcludeFolders
+
+          Write-Host "正在将显示语言与区域设置为中文..."
+          Set-SystemPreferredUILanguage -Language zh-CN
+          Set-WinSystemLocale -SystemLocale zh-CN
+          Set-WinUserLanguageList -LanguageList (New-WinUserLanguageList -Language zh-CN) -Force
+          Set-Culture -CultureInfo zh-CN
+
+      - name: 3. 创建远程桌面管理员账户
+        shell: powershell
+        run: |
+          $Username = "adminuser"
+          # 建议在仓库 Settings -> Secrets and variables -> Actions 中配置 RDP_PASSWORD，若无则使用下方默认密码
+          $Password = "${{ secrets.RDP_PASSWORD }}"
+          if ([string]::IsNullOrWhiteSpace($Password)) {
+              $Password = "Admin@Secure2026!" 
+          }
+          
+          $SecurePassword = ConvertTo-SecureString $Password -AsPlainText -Force
+          New-LocalUser -Name $Username -Password $SecurePassword -Description "RDP Admin User" -PasswordNeverExpires
+          Add-LocalGroupMember -Group "Administrators" -Member $Username
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member $Username
+
+      - name: 4. 安装并连接 Tailscale
+        shell: powershell
+        env:
+          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+        run: |
+          Write-Host "正在下载 Tailscale..."
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "tailscale-setup.exe"
+          
+          Write-Host "正在安装 Tailscale..."
+          Start-Process -FilePath .\tailscale-setup.exe -ArgumentList "/quiet" -Wait
+          
+          $tailscalePath = "C:\Program Files\Tailscale\tailscale.exe"
+          
+          # 等待后台服务启动
+          Start-Sleep -Seconds 5
+          
+          Write-Host "正在接入 Tailscale 网络..."
+          & $tailscalePath up --authkey=$env:TAILSCALE_AUTHKEY --hostname="github-rdp-server" --unattended
+
+      - name: 5. 保持服务器在线 (运行上限受 GitHub 限制)
+        shell: powershell
+        run: |
+          Write-Host "远程桌面与 Tailscale 均已就绪。"
+          Write-Host "注意：GitHub Actions 公共 Runner 最长单次任务上限为 6 小时。"
+          
+          # 循环保持挂起
+          $timeout = 21600 # 6小时对应 21600 秒
+          $interval = 30
+          $elapsed = 0
+          while ($elapsed -lt $timeout) {
+              Start-Sleep -Seconds $interval
+              $elapsed += $interval
+              Write-Host "保持运行中... ($elapsed / $timeout 秒)"
+          }
