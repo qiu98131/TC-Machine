@@ -15,6 +15,7 @@ jobs:
           Start-Service -Name TermService
 
       - name: 2. 安装中文语言包并配置系统区域
+        shell: pwsh
         run: |
           Set-TimeZone -Id "China Standard Time"
 
