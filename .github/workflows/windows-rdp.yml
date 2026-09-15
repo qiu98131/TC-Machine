@@ -9,6 +9,28 @@ jobs:
     timeout-minutes: 360
 
     steps:
+      - name: 0. Maximize C Drive Space
+        run: |
+          Write-Host "Cleaning up large unused SDKs and toolsets..."
+          # 删除预装的大型开发环境与工具（根据需要保留，若纯日常使用可全部清理）
+          $pathsToRemove = @(
+              "C:\hostedtoolcache",
+              "C:\Program Files (x86)\Android",
+              "C:\Program Files\dotnet",
+              "C:\ProgramData\Package Cache"
+          )
+          foreach ($p in $pathsToRemove) {
+              if (Test-Path $p) {
+                  Write-Host "Removing $p ..."
+                  Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $p
+              }
+          }
+
+          # 检查清理后的剩余空间
+          $drive = Get-PSDrive C
+          $freeGB = [math]::Round($drive.Free / 1GB, 2)
+          Write-Host "C: drive available space: $freeGB GB" -ForegroundColor Green
+          
       - name: 1. Enable Remote Desktop & Firewall
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
