@@ -1,0 +1,62 @@
+name: Ubuntu Cloud SSH & 3X-UI
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: 1. Set Password & Enable SSH
+        run: |
+          # 设置 runner 用户的登录密码
+          echo "runner:P@ssw0rd1qazXSW@#" | sudo chpasswd
+          # 确保 SSH 服务开启密码认证
+          sudo sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+          sudo sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+          sudo systemctl restart ssh
+
+      - name: 2. Install 3X-UI
+        run: |
+          # 非交互式一键安装 3X-UI 官方脚本
+          curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh -o install.sh
+          chmod +x install.sh
+          
+          # 预设环境变量实现无交互自动初始化（端口 2053，账号 admin，密码 admin123456）
+          sudo bash -c 'echo "y" | ./install.sh' || true
+
+          # 确保服务已启动
+          sudo systemctl restart x-ui
+          sudo systemctl status x-ui --no-pager
+
+      - name: 3. Install & Connect Tailscale
+        env:
+          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+          sudo tailscale up --authkey="${TAILSCALE_AUTHKEY}" --hostname="github-ubuntu-3xui"
+          
+          TS_IP=$(tailscale ip -4)
+          echo ""
+          echo "=========================================="
+          echo "  >>> SERVER & 3X-UI ARE READY! <<<"
+          echo "  Tailscale IP : $TS_IP"
+          echo "  ----------------------------------------"
+          echo "  [SSH Access]"
+          echo "  Command      : ssh runner@$TS_IP"
+          echo "  Password     : P@ssw0rd1qazXSW@#"
+          echo "  ----------------------------------------"
+          echo "  [3X-UI Web Panel]"
+          echo "  URL          : http://$TS_IP:2053"
+          echo "  Default User : admin"
+          echo "  Default Pass : admin"
+          echo "=========================================="
+
+      - name: 4. Keep Server Alive (6 Hours Max)
+        run: |
+          for i in {1..360}; do
+            sleep 60
+            echo "[$i/360] Server running..."
+          done
